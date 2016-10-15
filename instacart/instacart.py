@@ -1,12 +1,21 @@
 # -*- coding: utf-8 -*-
 
+import copy
 import os
+import random
+import re
+import string
+import time
 import traceback
 
+from collections import OrderedDict
+from datetime import datetime
 from sqlite3 import dbapi2 as sqlite3
 from flask import Flask, request, session, g, jsonify, redirect, url_for, \
     render_template, flash
 
+
+FAKE_APPLICATIONS = 1000000
 
 # create our little application :)
 app = Flask(__name__)
@@ -32,8 +41,76 @@ def connect_db():
 def init_db():
     """Initializes the database."""
     db = get_db()
+
+    # Create the tables.
     with app.open_resource('schema.sql', mode='r') as f:
         db.cursor().executescript(f.read())
+
+    # Handy function for generating random strings.
+    def string_gen(size=6, chars=string.ascii_uppercase + string.digits):
+        return ''.join(random.choice(chars) for _ in range(size))
+
+    # Handy function for generating dates in the range
+    def application_date_gen():
+        earliest = 1325376001  # Sun, 01 Jan 2012 00:00:01 GMT
+        latest = 1419984001  # Wed, 31 Dec 2014 00:00:01 GMT
+        time_val = random.randint(earliest, latest)
+        return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time_val))
+
+    # Create a whole bunch of records.
+    for _ in range(0, FAKE_APPLICATIONS):
+        applicant_status = random.choice(['p', 'h', 'r'])
+        quiz_completed = application_date_gen()
+        onboarding_completed = application_date_gen()
+
+        # If the applicant isn't hired, there's a chance they haven't completed
+        # quiz and onboarding.  Give it a 50% chance
+        if applicant_status != 'h':
+            quiz_completed = random.choice([None, quiz_completed])
+            onboarding_completed = random.choice([None, onboarding_completed])
+
+        # Create the applicant.
+        application_cursor = db.execute(
+            (
+                "INSERT INTO `applications` "
+                "(firstname, lastname, email, cell_number, city, created, "
+                "status) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)"
+            ),
+            (
+                string_gen(), string_gen(), string_gen(), string_gen(),
+                string_gen(), application_date_gen(), applicant_status
+            ),
+        )
+        
+        application_id = application_cursor.lastrowid
+
+        # Create the quiz
+        if onboarding_completed or random.choice([True, False]):
+            db.execute(
+                (
+                    "INSERT INTO `quiz` "
+                    "(application_id, completed) "
+                    "VALUES (?, ?)"
+                ),
+                (
+                    application_id, quiz_completed,
+                ),
+            )
+
+        # Create the onboarding
+        if quiz_completed or random.choice([True, False]):
+            db.execute(
+                (
+                    "INSERT INTO `onboarding` "
+                    "(application_id, completed) "
+                    "VALUES (?, ?)"
+                ),
+                (
+                    application_id, onboarding_completed,
+                ),
+            )
+        
     db.commit()
 
 
@@ -171,3 +248,81 @@ def logout():
     session.clear()
     flash('You were logged out')
     return redirect(url_for('route_home'))
+
+
+@app.route('/funnels.json')
+def route_funnels():
+    start = request.values.get('start_date', '')
+    end = request.values.get('end_date', '')
+
+    if not re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', start):
+        return jsonify({
+            'err': 'Bad start date',
+        })
+
+    if not re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', end):
+        return jsonify({
+            'err': 'Bad end date',
+        })    
+
+    db = get_db()
+
+    cursor = db.execute(
+        (
+            """
+            SELECT
+            status,
+            count(*) as num_applicants,
+            count(t_q.id) as num_quiz,
+            count(t_q.completed) as num_quiz_complete,
+            count(t_o.id) as num_onboard,
+            count(t_o.completed) as num_onboard_complete,
+            strftime('%Y.%W', t_a.created) as app_year_week
+            FROM applications as t_a
+            LEFT JOIN quiz as t_q ON t_a.id=t_q.application_id
+            LEFT JOIN onboarding as t_o ON t_a.id=t_o.application_id
+            WHERE t_a.created BETWEEN ? and ?
+            GROUP BY app_year_week, status
+            ORDER BY t_a.created
+            """
+        ),
+        (
+            start, end
+        )
+    )
+
+    default = OrderedDict({
+        'applied': 0,
+        'quiz_started': 0,
+        'quiz_completed': 0,
+        'onboarding_requested': 0,
+        'onboarding_completed': 0,
+        'hired': 0,
+        'rejected': 0
+    })
+    
+    data = OrderedDict()
+    
+    for row in cursor.fetchall():
+        row = dict(zip(row.keys(), row))
+        year_week = row['app_year_week']
+
+        start_date = datetime.strptime(year_week, "%Y.%W")
+        print(year_week, start_date)
+        
+        if year_week not in data:
+            data[year_week] = copy.copy(default)
+            
+        curr = data[year_week]
+        curr["applied"] += row['num_applicants']
+        curr["quiz_started"] += row['num_quiz']
+        curr["quiz_completed"] += row['num_quiz_complete']
+        curr["onboarding_requested"] += row['num_onboard']
+        curr["onboarding_completed"] += row['num_onboard_complete']
+
+        if row['status'] == 'h':
+            curr["hired"] += row['num_applicants']
+        elif row['status'] == 'r':
+            curr["rejected"] += row['num_applicants']
+
+    return jsonify(data)

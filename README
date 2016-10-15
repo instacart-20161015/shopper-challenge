@@ -1,13 +1,4 @@
-                         / Instacart /
-
-                 a minimal blog application
-
-
-    ~ What is Instacart?
-
-      A sqlite powered thumble blog application
-
-    ~ How do I use it?
+INSTALLATION:
 
       1. edit the configuration in the instacart.py file or
          export an INSTACART_SETTINGS environment variable
@@ -32,7 +23,6 @@
          the application will greet you on
          http://localhost:5000/
 
-    ~ Is it tested?
+TESTING:
 
-      You betcha.  Run `python setup.py test` to see
-      the tests pass.
+      Run `python setup.py test` 
