@@ -1,5 +1,6 @@
 #*#
 *~
+*__pycache__*
 development.sqlite3
 instacart.egg-info
 .eggs/

@@ -1,6 +1,10 @@
-drop table if exists entries;
-create table entries (
+drop table if exists applications;
+
+create table applications (
   id integer primary key autoincrement,
-  title text not null,
-  'text' text not null
+  firstname varchar(50) not null,
+  lastname varchar(50) not null,
+  email varchar(100) not null,
+  cell_number varchar(20) not null,
+  city varchar(50) not null
 );
