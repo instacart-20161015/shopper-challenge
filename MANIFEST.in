@@ -1,0 +1,3 @@
+graft instacart/templates
+graft instacart/static
+include instacart/schema.sql
