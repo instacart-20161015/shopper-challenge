@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<h1>Home</h1>
+{% endblock %}
+
+{% block body %}
+
+{% if session.application_id %}
+<h3>Your application is pending.  We will be in touch as soon as possible!</h3>
+<div>
+  <a href="/apply" class="btn btn-primary" >Edit My Application</a>
+</div>
+{% else %}
+<h3>You too can be an instacart shopper.</h3>
+<div>
+  <a href="/apply" class="btn btn-primary" >Apply Now!</a>
+</div>
+{% endif %}
+
+{% endblock %}

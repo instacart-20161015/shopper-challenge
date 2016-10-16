@@ -1,0 +1,161 @@
+{% extends "layout.html" %}
+
+{% block head %}
+
+<h1>Shopper Signup</h1>
+
+{% if app_data %}
+<div class="topNote">
+  You are editing your existing application.
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block body %}
+<div>
+<form action="{{ url_for('route_apply') }}" method="post" id="apply_form">
+  <div class="form-group form-inline" id="name_field">
+    <input type="firstname" class="form-control" name="firstname" value="{{app_data.firstname}}" placeholder="First Name">
+    <input type="lastname" class="form-control" name="lastname" value="{{app_data.lastname}}" placeholder="Last Name">
+    <span class="help-block error-block">Please enter your first and last name</span>
+  </div>
+  <div class="form-group" id="email_field">
+    <input type="email" class="form-control" name="email" value="{{app_data.email}}" placeholder="Email Address">
+    <span class="help-block error-block">Please enter an email address of the form "name@domain.com"</span>
+  </div>
+  <div class="form-group" id="cell_field">
+    <input type="cell_number" class="form-control" name="cell_number" value="{{app_data.cell_number}}" placeholder="Cell Phone Number">
+    <span class="help-block error-block">Please enter your cell phone number</span>
+  </div>
+  <div class="form-group" id="city_field">
+    <select class="form-control" name="city">
+      <option value="">Select your City</option>
+      <option value=""></option>
+      <option>San Francisco</option>
+      <option>Timbuktu</option>
+      <option>New Jack</option>
+    </select>
+    <span class="help-block error-block">Please select your city</span>
+  </div>
+<button id="submit" class="btn btn-primary">Submit</button>
+</form>
+
+</div>
+
+<div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+	<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+	  <span aria-hidden="true">&times;</span>
+	</button>
+	<h4 class="modal-title" id="myModalLabel">Confirm</h4>
+      </div>
+      <div class="modal-body">
+        Instacart will perform a background check based on the information provided, before your application can be confirmed.
+      </div>
+      <div class="modal-footer">
+	<button type="button" class="btn btn-secondary" id="apply_confirm">I Agree</button>
+	<button type="button" class="btn btn-primary" data-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+
+$("#apply_form").submit(function(e) {
+    var url = "/apply";
+    var f1 = $(this);
+
+    e.preventDefault(); // avoid to execute the actual submit of the form.
+
+    if (! validate_application(f1)) {
+	return;
+    }
+
+    $("#myModal").modal('show');
+});
+
+var validate_application = function(f1, force=[]) {
+    data = {}
+    f1.serializeArray().map(function(x){data[x.name] = x.value;});
+    console.log(f1);
+    console.log(data);
+    succ = true;
+
+    if (force.includes('firstname') ||
+	force.includes('lastname') ||
+	(! (data["firstname"] && data["lastname"])))
+    {
+	$("#name_field").addClass('has-error');
+	succ = false;
+    }
+    else {
+	$("#name_field").removeClass('has-error');
+    }
+
+    if (force.includes('email') || (! data["email"])) {
+	$("#email_field").addClass('has-error');
+	succ = false;
+    }
+    else {
+	$("#email_field").removeClass('has-error');
+    }
+    
+    if (force.includes('cell') || (! data["cell_number"])) {
+	$("#cell_field").addClass('has-error');
+	succ = false;
+    }
+    else {
+	$("#cell_field").removeClass('has-error');
+    }
+    
+    if (force.includes('city') || (! data["city"])) {
+	$("#city_field").addClass('has-error');
+	succ = false;
+    }
+    else {
+	$("#city_field").removeClass('has-error');
+    }
+    
+    return succ;
+}
+
+$("#apply_form input, #apply_form select").change(function() {
+    $(this).parent('.form-group').removeClass('has-error');
+});
+
+$("#apply_confirm").click(function() {
+    var url = "/apply";
+    var f1 = $("#apply_form");
+    
+    $("#myModal").modal('hide');
+    $.ajax({
+        type: "POST",
+        url: url,
+        data: f1.serialize(),
+        success: function(data) {
+	    if (data.succ) {
+		document.location = "{{ url_for('route_apply_confirm') }}";
+		return;
+	    }
+
+	    if (data.err) {
+		alert(data.err);
+	    }
+
+	    validate_application(f1, data.err_fields);
+            console.log(data);
+        }
+    });
+});
+
+$(window).ready(function() {
+    $("#apply_form select[name='city']").val("{{app_data.city}}");
+});
+
+</script>
+
+{% endblock %}
