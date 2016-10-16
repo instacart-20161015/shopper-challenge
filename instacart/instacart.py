@@ -159,8 +159,8 @@ def route_apply():
             )
         except:
             del session['application_id']
-            
-        app_data = cur.fetchone()
+        else:
+            app_data = cur.fetchone()
         
     return render_template('apply.html', app_data=app_data)
 
@@ -201,7 +201,7 @@ def route_apply_submit():
                     "WHERE id=?"
                 ),
                 (
-                    data["firstname"], data["firstname"], data["email"],
+                    data["firstname"], data["lastname"], data["email"],
                     data["cell"], data["city"], app_id
                 ),
             )
@@ -214,7 +214,7 @@ def route_apply_submit():
                     "VALUES (?, ?, ?, ?, ?)"
                 ),
                 (
-                    data["firstname"], data["firstname"], data["email"],
+                    data["firstname"], data["lastname"], data["email"],
                     data["cell"], data["city"]
                 ),
             )
