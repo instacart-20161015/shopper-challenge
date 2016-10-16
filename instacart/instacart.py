@@ -9,15 +9,16 @@ import time
 import traceback
 
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlite3 import dbapi2 as sqlite3
 from flask import Flask, request, session, g, jsonify, redirect, url_for, \
     render_template, flash
 
 
+# The number of fake applications to make.  initdb() will create this
+# many applications, with permutations on the status of the application.
 FAKE_APPLICATIONS = 1000000
 
-# create our little application :)
 app = Flask(__name__)
 
 # Load default config and override config from an environment variable
@@ -36,6 +37,15 @@ def connect_db():
     rv = sqlite3.connect(app.config['DATABASE'])
     rv.row_factory = sqlite3.Row
     return rv
+
+
+def get_db():
+    """Opens a new database connection if there is none yet for the
+    current application context.
+    """
+    if not hasattr(g, 'sqlite_db'):
+        g.sqlite_db = connect_db()
+    return g.sqlite_db
 
 
 def init_db():
@@ -121,15 +131,6 @@ def initdb_command():
     print('Initialized the database.')
 
 
-def get_db():
-    """Opens a new database connection if there is none yet for the
-    current application context.
-    """
-    if not hasattr(g, 'sqlite_db'):
-        g.sqlite_db = connect_db()
-    return g.sqlite_db
-
-
 @app.teardown_appcontext
 def close_db(error):
     """Closes the database again at the end of the request."""
@@ -145,11 +146,12 @@ def route_home():
 @app.route('/apply', methods=['GET'])
 def route_apply():
     app_data = {}
-    
+
+    # Do we have an application?
     app_id = session.get('application_id')
     if app_id:
+        # Yep, get the existing data.
         db = get_db()
-
         try:
             cur = db.execute(
                 "SELECT * FROM applications WHERE id=? LIMIT 1",
@@ -226,7 +228,7 @@ def route_apply_submit():
         
         # Couldn't save.  Give a generic error.
         return jsonify({
-            'err': 'An unexpected error occurred.  Please try again'
+            'err': 'An unexpected error occurred.  Please try again.'
         })
 
     # Set the application ID for future reference.
@@ -255,11 +257,13 @@ def route_funnels():
     start = request.values.get('start_date', '')
     end = request.values.get('end_date', '')
 
+    # Sanity check start_date
     if not re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', start):
         return jsonify({
             'err': 'Bad start date',
         })
 
+    # Sanity check end_date
     if not re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', end):
         return jsonify({
             'err': 'Bad end date',
@@ -267,6 +271,11 @@ def route_funnels():
 
     db = get_db()
 
+    # Get all sums by days.
+    # NOTE: I'd love to group here by %Y.%W, to get max 52 records per
+    # year instead of the 365 we get per year by grouping on date.
+    # Sadly SQLite starts weeks on Sunday, and the project requirements say
+    # the week needs to start on Monday.
     cursor = db.execute(
         (
             """
@@ -277,12 +286,12 @@ def route_funnels():
             count(t_q.completed) as num_quiz_complete,
             count(t_o.id) as num_onboard,
             count(t_o.completed) as num_onboard_complete,
-            strftime('%Y.%W', t_a.created) as app_year_week
+            date(t_a.created) as created_date
             FROM applications as t_a
             LEFT JOIN quiz as t_q ON t_a.id=t_q.application_id
             LEFT JOIN onboarding as t_o ON t_a.id=t_o.application_id
-            WHERE t_a.created BETWEEN ? and ?
-            GROUP BY app_year_week, status
+            WHERE date(t_a.created) >= ? and date(t_a.created) < ?
+            GROUP BY date(t_a.created), status
             ORDER BY t_a.created
             """
         ),
@@ -291,6 +300,7 @@ def route_funnels():
         )
     )
 
+    # The default we'll start with for each week
     default = OrderedDict({
         'applied': 0,
         'quiz_started': 0,
@@ -305,21 +315,29 @@ def route_funnels():
     
     for row in cursor.fetchall():
         row = dict(zip(row.keys(), row))
-        year_week = row['app_year_week']
 
-        start_date = datetime.strptime(year_week, "%Y.%W")
-        print(year_week, start_date)
-        
-        if year_week not in data:
-            data[year_week] = copy.copy(default)
-            
-        curr = data[year_week]
+        # Get the week-bounded date keyB
+        dt = datetime.strptime(row['created_date'], '%Y-%m-%d')
+        start = dt - timedelta(days=dt.weekday())
+        end = start + timedelta(days=6)
+        date_key = "{}-{}".format(
+            datetime.strftime(start, "%Y-%m-%d"),
+            datetime.strftime(end, "%Y-%m-%d")
+        )
+
+        # Make sure the data is there for this week.
+        if date_key not in data:
+            data[date_key] = copy.copy(default)
+
+        # Update the data.
+        curr = data[date_key]
         curr["applied"] += row['num_applicants']
         curr["quiz_started"] += row['num_quiz']
         curr["quiz_completed"] += row['num_quiz_complete']
         curr["onboarding_requested"] += row['num_onboard']
         curr["onboarding_completed"] += row['num_onboard_complete']
 
+        # Add status
         if row['status'] == 'h':
             curr["hired"] += row['num_applicants']
         elif row['status'] == 'r':

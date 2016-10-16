@@ -22,7 +22,3 @@ INSTALLATION:
 
          the application will greet you on
          http://localhost:5000/
-
-TESTING:
-
-      Run `python setup.py test` 
