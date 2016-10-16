@@ -25,12 +25,12 @@ INSTALLATION:
 
 NOTES:
 
-Currently no my machine I am only able to get the application to work in Python3.  In Python2,
+Currently no my machine I am only able to get the application to work in Python3 (my typical env).  In Python2,
 "flask run" fails because it cannot import "instacart".  Unfortunately I cannot say why this is happening.
 If you have problems running the app, please contact me.
 
 initdb will create 1,000,000 applications between 2012 ad 2014, with all permutations of application status
-regarding quiz and onboarding.
+regarding quiz, onboarding, and hired state.
 
 The project did not have any information about what quiz and onboarding are supposed to be, and unfortunately
 my timing does not allow for me to ask questions (I have to do this over the weekend).  I created a db
@@ -40,3 +40,7 @@ applications.
 In creating all the permutations of the application records, I assumed that an applicant cannot be "hired"
 unless they have completed onboarding and quiz.  From your sample data I saw indication that an applicant
 can complete quiz and onboarding but not be "hired", so I allowed for this in the sample data.
+
+Last, I am not a front end developer.  I have the basic skills and can create anything, but I do not
+desire front end work and have not applied to do so.  Therefore I spent very little time trying to make
+the GUI anything more than stable and functional.
